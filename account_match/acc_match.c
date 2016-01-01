@@ -52,12 +52,19 @@ struct account_match {
 	struct data_sample tgt;
 };
 
+extern void dos2unix(const char* file_name);
+extern void ex_dos2unix(const char* file_name);
+
 static void *read_file(const char *fname, unsigned *_sz)
 {
 	char *data;
 	int sz;
 	int fd;
 	struct stat sb;
+
+	/* convert file formats */
+	dos2unix(fname);
+//	ex_dos2unix(fname);
 
 	data = 0;
 	fd = open(fname, O_RDONLY);
