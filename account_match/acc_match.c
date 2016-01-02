@@ -52,8 +52,20 @@ struct account_match {
 	struct data_sample tgt;
 };
 
-extern void dos2unix(const char* file_name);
-extern void ex_dos2unix(const char* file_name);
+
+static void dos2unix(const char *buf, int size)
+{
+	char *p = (char *)buf;
+
+	while((p = strchr(p, '\r')) != NULL) {
+		int ch = *(p + 1);
+
+		if(ch == '\n') {
+			*p = 0x20;
+		}
+	}
+}
+
 
 static void *read_file(const char *fname, unsigned *_sz)
 {
@@ -63,8 +75,7 @@ static void *read_file(const char *fname, unsigned *_sz)
 	struct stat sb;
 
 	/* convert file formats */
-	dos2unix(fname);
-//	ex_dos2unix(fname);
+//	dos2unix(fname);
 
 	data = 0;
 	fd = open(fname, O_RDONLY);
@@ -87,8 +98,13 @@ static void *read_file(const char *fname, unsigned *_sz)
 	if(data == 0)
 		goto oops;
 
+	/* XXX */
+#if 0
 	if(read(fd, data, sz) != sz) 
 		goto oops;
+#else
+	sz = read(fd, data, sz);
+#endif
 
 	close(fd);
 	data[sz] = '\n';
@@ -96,6 +112,7 @@ static void *read_file(const char *fname, unsigned *_sz)
 	if(_sz)
 		*_sz = sz;
 
+	dos2unix(data, sz);
 	return data;
 
 oops:
