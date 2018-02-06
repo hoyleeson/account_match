@@ -1,4 +1,7 @@
 #include <stdio.h>
+#include <ctype.h>
+#include <unistd.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
@@ -8,6 +11,7 @@
 
 #include "xstrtod.h"
 #include "parser.h"
+#include "utils.h"
 #include "sort.h"
 
 #ifdef DEBUG
@@ -16,13 +20,6 @@
 #define debug(...) 
 #endif
 
-#ifndef bool
-typedef int bool;
-enum {
-	false = 0,
-	true = 1
-};
-#endif
 
 #define DEFAULT_FILE_SOURCE 	"a.txt"
 #define DEFAULT_FILE_TARGET 	"b.txt"
@@ -30,6 +27,12 @@ enum {
 
 #define ITEM_VAILD 		(1 << 0)
 #define ITEM_MATCH 		(1 << 1)
+
+enum item_data_type {
+    TYPE_INTEGER,
+    TYPE_DOUBLE,
+    TYPE_IPADDR,
+};
 
 struct item {
 	int index;  /* start from 1 */
@@ -52,6 +55,31 @@ struct account_match {
 	struct data_sample tgt;
 };
 
+int data_type = TYPE_DOUBLE;
+
+char *xskip_spaces(const char *str)
+{
+    while (isspace(*str))
+        ++str;
+    return (char *)str;
+}
+
+char *xstrim(char *s)
+{
+    size_t size;
+    char *end;
+
+    size = strlen(s);
+    if (!size)
+        return s;
+
+    end = s + size - 1;
+    while (end >= s && isspace(*end))
+        end--;
+    *(end + 1) = '\0';
+
+    return xskip_spaces(s);
+}
 
 static void dos2unix(const char *buf, int size)
 {
@@ -133,6 +161,7 @@ static bool str_isdigit(const char *s)
 	return true;
 }
 
+
 static struct item *create_item(const char *data)
 {
 	struct item *item;
@@ -142,16 +171,21 @@ static struct item *create_item(const char *data)
 	if(!item)
 		return NULL;
 
-	item->data = (char *)data;
+	item->data = xstrim((char *)data);
 	item->flags = 0;
 	item->next = NULL;
 
-	if(str_isdigit(data))
+	if(str_isdigit(item->data))
 		item->flags |= ITEM_VAILD;
 	else 
 		item->flags &= (~ITEM_VAILD);
 
-	item->val = xstrtod(data, &endptr);
+    if (data_type == TYPE_DOUBLE)
+        item->val = xstrtod(item->data, &endptr);
+    else if (data_type == TYPE_IPADDR)
+        item->val = strtoip(item->data);
+    else 
+        item->val = strtol(item->data, &endptr, 0);
 
 	return item;
 }
@@ -226,12 +260,18 @@ int parse_file(struct item **head, const char *fname)
 
 int cmpitem(const void *a, const void *b)
 {
+    double diff;
 	unsigned long x = *(unsigned long *)a;
 	unsigned long y = *(unsigned long *)b;
 	struct item *s = (struct item *)x;
 	struct item *t = (struct item *)y;
 
-	return s->val - t->val;
+    diff = s->val - t->val;
+	if (diff > 0)
+        return 1;
+    else if (diff < 0)
+        return -1;
+    return 0;
 //	return *(double *)a - *(double *)b;
 }
 
@@ -314,6 +354,7 @@ static int acc_match(struct account_match *acc)
 			p2++;
 		} while(p2 != (acc->tgt.sort + (acc->tgt.count - 1)));
 
+        continue;
 found:
 		s->flags |= ITEM_MATCH;
 		t->flags |= ITEM_MATCH;

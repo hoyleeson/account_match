@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <ctype.h>
 
 double xstrtod(const char* s, char** endptr)
 {
